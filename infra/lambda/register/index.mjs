@@ -1,4 +1,4 @@
-import mysql from "mysql2/promise";
+import mysql from "mysql2/promise.js";
 import { createHash } from "crypto";
 import { randomUUID } from "crypto";
 

@@ -1,13 +1,13 @@
 variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string
-  default     = "ap-southeast-1"
+  default     = "ap-southeast-2"
 }
 
 variable "project" {
   description = "Project name prefix for all resources"
   type        = string
-  default     = "smartqueue"
+  default     = "biterush"
 }
 
 variable "lambda_runtime" {
@@ -19,21 +19,26 @@ variable "lambda_runtime" {
 variable "jwt_secret" {
   description = "Secret key for signing JWT tokens"
   type        = string
-  default     = "smartqueue-jwt-secret-change-in-prod"
   sensitive   = true
 }
 
 variable "master_key" {
   description = "Master admin key for managing all restaurants"
   type        = string
-  default     = "MASTER-SMARTQUEUE-2024"
   sensitive   = true
 }
 
-variable "db_name" {
-  description = "RDS database name"
+# ── RDS (existing instance — Terraform does not create it) ────────────────────
+
+variable "db_host" {
+  description = "Existing RDS MySQL endpoint hostname (no port)"
   type        = string
-  default     = "smartqueue"
+}
+
+variable "db_name" {
+  description = "MySQL database name"
+  type        = string
+  default     = "biterush"
 }
 
 variable "db_username" {
@@ -47,10 +52,4 @@ variable "db_password" {
   description = "RDS master password"
   type        = string
   sensitive   = true
-}
-
-variable "db_host" {
-  description = "RDS endpoint hostname"
-  type        = string
-  default     = "smartqueue-mysql.cliwcewwcbhv.ap-southeast-1.rds.amazonaws.com"
 }

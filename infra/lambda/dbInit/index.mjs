@@ -1,9 +1,15 @@
-import mysql from "mysql2/promise";
+import mysql from "mysql2/promise.js";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Content-Type": "application/json",
 };
+
+// Connect without specifying a database first so we can CREATE DATABASE if needed
+const getRootConn = () => mysql.createConnection({
+  host: process.env.DB_HOST, port: Number(process.env.DB_PORT) || 3306,
+  user: process.env.DB_USER, password: process.env.DB_PASSWORD,
+});
 
 const getConn = () => mysql.createConnection({
   host: process.env.DB_HOST, port: Number(process.env.DB_PORT) || 3306,
@@ -12,6 +18,16 @@ const getConn = () => mysql.createConnection({
 });
 
 export const handler = async () => {
+  // Step 1: create the database if it doesn't exist
+  const root = await getRootConn();
+  try {
+    await root.execute(`CREATE DATABASE IF NOT EXISTS \`${process.env.DB_NAME}\``);
+    console.log(`Database '${process.env.DB_NAME}' ensured.`);
+  } finally {
+    await root.end();
+  }
+
+  // Step 2: connect to the database and create tables
   const conn = await getConn();
   try {
     await conn.execute(`

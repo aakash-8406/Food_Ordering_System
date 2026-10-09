@@ -1,4 +1,4 @@
-import mysql from "mysql2/promise";
+import mysql from "mysql2/promise.js";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

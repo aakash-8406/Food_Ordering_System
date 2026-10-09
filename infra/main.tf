@@ -21,6 +21,45 @@ provider "aws" { region = var.aws_region }
 data "aws_caller_identity" "current" {}
 data "aws_availability_zones" "available" { state = "available" }
 
+# ─── Install node_modules in every Lambda folder before zipping ───────────────
+# This runs once (or when package.json changes) before Terraform creates zips.
+
+resource "null_resource" "lambda_deps" {
+  # Re-run if any package.json changes
+  triggers = {
+    customerLogin_pkg    = filemd5("${path.module}/lambda/customerLogin/package.json")
+    customerRegister_pkg = filemd5("${path.module}/lambda/customerRegister/package.json")
+    dbInit_pkg           = filemd5("${path.module}/lambda/dbInit/package.json")
+    deleteRestaurant_pkg = filemd5("${path.module}/lambda/deleteRestaurant/package.json")
+    getOrders_pkg        = filemd5("${path.module}/lambda/getOrders/package.json")
+    getRestaurantById_pkg= filemd5("${path.module}/lambda/getRestaurantById/package.json")
+    getRestaurants_pkg   = filemd5("${path.module}/lambda/getRestaurants/package.json")
+    login_pkg            = filemd5("${path.module}/lambda/login/package.json")
+    placeOrder_pkg       = filemd5("${path.module}/lambda/placeOrder/package.json")
+    register_pkg         = filemd5("${path.module}/lambda/register/package.json")
+    updateOrder_pkg      = filemd5("${path.module}/lambda/updateOrder/package.json")
+    updateRestaurant_pkg = filemd5("${path.module}/lambda/updateRestaurant/package.json")
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["PowerShell", "-Command"]
+    command     = <<-PS
+      $dirs = @(
+        "customerLogin","customerRegister","dbInit","deleteRestaurant",
+        "getOrders","getRestaurantById","getRestaurants","login",
+        "placeOrder","register","updateOrder","updateRestaurant"
+      )
+      foreach ($d in $dirs) {
+        Write-Host "Installing deps: $d"
+        Push-Location "${path.module}/lambda/$d"
+        npm install --omit=dev --silent
+        Pop-Location
+      }
+      Write-Host "All Lambda deps installed."
+    PS
+  }
+}
+
 # ─── IAM ──────────────────────────────────────────────────────────────────────
 
 resource "aws_iam_role" "lambda_exec" {
@@ -59,74 +98,91 @@ locals {
 }
 
 # ─── Lambda zips ──────────────────────────────────────────────────────────────
+# All zips depend on lambda_deps so node_modules are installed before zipping.
 
 data "archive_file" "place_order_zip" {
   type        = "zip"
   source_dir  = "${path.module}/lambda/placeOrder"
   output_path = "${path.module}/.build/placeOrder.zip"
   excludes    = ["package-lock.json"]
+  depends_on  = [null_resource.lambda_deps]
 }
 data "archive_file" "get_orders_zip" {
   type        = "zip"
   source_dir  = "${path.module}/lambda/getOrders"
   output_path = "${path.module}/.build/getOrders.zip"
   excludes    = ["package-lock.json"]
+  depends_on  = [null_resource.lambda_deps]
 }
 data "archive_file" "update_order_zip" {
   type        = "zip"
   source_dir  = "${path.module}/lambda/updateOrder"
   output_path = "${path.module}/.build/updateOrder.zip"
   excludes    = ["package-lock.json"]
+  depends_on  = [null_resource.lambda_deps]
 }
 data "archive_file" "register_zip" {
   type        = "zip"
   source_dir  = "${path.module}/lambda/register"
   output_path = "${path.module}/.build/register.zip"
   excludes    = ["package-lock.json"]
+  depends_on  = [null_resource.lambda_deps]
 }
 data "archive_file" "login_zip" {
   type        = "zip"
   source_dir  = "${path.module}/lambda/login"
   output_path = "${path.module}/.build/login.zip"
   excludes    = ["package-lock.json"]
+  depends_on  = [null_resource.lambda_deps]
 }
 data "archive_file" "delete_restaurant_zip" {
   type        = "zip"
   source_dir  = "${path.module}/lambda/deleteRestaurant"
   output_path = "${path.module}/.build/deleteRestaurant.zip"
   excludes    = ["package-lock.json"]
+  depends_on  = [null_resource.lambda_deps]
 }
 data "archive_file" "get_restaurant_by_id_zip" {
   type        = "zip"
   source_dir  = "${path.module}/lambda/getRestaurantById"
   output_path = "${path.module}/.build/getRestaurantById.zip"
   excludes    = ["package-lock.json"]
+  depends_on  = [null_resource.lambda_deps]
 }
 data "archive_file" "get_restaurants_zip" {
   type        = "zip"
   source_dir  = "${path.module}/lambda/getRestaurants"
   output_path = "${path.module}/.build/getRestaurants.zip"
   excludes    = ["package-lock.json"]
+  depends_on  = [null_resource.lambda_deps]
 }
 data "archive_file" "update_restaurant_zip" {
   type        = "zip"
   source_dir  = "${path.module}/lambda/updateRestaurant"
   output_path = "${path.module}/.build/updateRestaurant.zip"
   excludes    = ["package-lock.json"]
+  depends_on  = [null_resource.lambda_deps]
 }
-
 data "archive_file" "customer_register_zip" {
   type        = "zip"
   source_dir  = "${path.module}/lambda/customerRegister"
   output_path = "${path.module}/.build/customerRegister.zip"
   excludes    = ["package-lock.json"]
+  depends_on  = [null_resource.lambda_deps]
 }
-
 data "archive_file" "customer_login_zip" {
   type        = "zip"
   source_dir  = "${path.module}/lambda/customerLogin"
   output_path = "${path.module}/.build/customerLogin.zip"
   excludes    = ["package-lock.json"]
+  depends_on  = [null_resource.lambda_deps]
+}
+data "archive_file" "db_init_zip" {
+  type        = "zip"
+  source_dir  = "${path.module}/lambda/dbInit"
+  output_path = "${path.module}/.build/dbInit.zip"
+  excludes    = ["package-lock.json"]
+  depends_on  = [null_resource.lambda_deps]
 }
 
 # ─── Lambda functions ─────────────────────────────────────────────────────────
@@ -263,7 +319,21 @@ resource "aws_lambda_function" "update_restaurant" {
   tags = { Project = var.project }
 }
 
-# ─── CloudWatch ───────────────────────────────────────────────────────────────
+# ─── DB Init Lambda (creates tables on first deploy) ─────────────────────────
+
+resource "aws_lambda_function" "db_init" {
+  function_name    = "${var.project}-dbInit"
+  role             = aws_iam_role.lambda_exec.arn
+  runtime          = var.lambda_runtime
+  handler          = "index.handler"
+  filename         = data.archive_file.db_init_zip.output_path
+  source_code_hash = data.archive_file.db_init_zip.output_base64sha256
+  timeout          = 60
+  environment { variables = local.rds_env }
+  tags = { Project = var.project }
+}
+
+# ─── CloudWatch Log Groups ────────────────────────────────────────────────────
 
 resource "aws_cloudwatch_log_group" "customer_register" {
   name              = "/aws/lambda/${aws_lambda_function.customer_register.function_name}"
@@ -271,10 +341,6 @@ resource "aws_cloudwatch_log_group" "customer_register" {
 }
 resource "aws_cloudwatch_log_group" "customer_login" {
   name              = "/aws/lambda/${aws_lambda_function.customer_login.function_name}"
-  retention_in_days = 7
-}
-resource "aws_cloudwatch_log_group" "api_gw" {
-  name              = "/aws/apigateway/${var.project}-api"
   retention_in_days = 7
 }
 resource "aws_cloudwatch_log_group" "place_order" {
@@ -311,6 +377,14 @@ resource "aws_cloudwatch_log_group" "get_restaurants" {
 }
 resource "aws_cloudwatch_log_group" "update_restaurant" {
   name              = "/aws/lambda/${aws_lambda_function.update_restaurant.function_name}"
+  retention_in_days = 7
+}
+resource "aws_cloudwatch_log_group" "db_init" {
+  name              = "/aws/lambda/${aws_lambda_function.db_init.function_name}"
+  retention_in_days = 7
+}
+resource "aws_cloudwatch_log_group" "api_gw" {
+  name              = "/aws/apigateway/${var.project}-api"
   retention_in_days = 7
 }
 
@@ -529,7 +603,7 @@ resource "aws_lambda_permission" "delete_restaurant" {
   source_arn    = "${local.api_arn_prefix}/restaurants/*"
 }
 resource "aws_lambda_permission" "get_restaurant_by_id" {
-  statement_id  = "AllowAPIGatewayInvoke"
+  statement_id  = "AllowAPIGatewayInvokeById"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.get_restaurant_by_id.function_name
   principal     = "apigateway.amazonaws.com"
@@ -543,44 +617,37 @@ resource "aws_lambda_permission" "get_restaurants" {
   source_arn    = "${local.api_arn_prefix}/restaurants"
 }
 resource "aws_lambda_permission" "update_restaurant" {
-  statement_id  = "AllowAPIGatewayInvoke"
+  statement_id  = "AllowAPIGatewayInvokeUpdate"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.update_restaurant.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${local.api_arn_prefix}/restaurants/*"
 }
 
-# ─── DB Init Lambda (creates tables on first deploy) ─────────────────────────
+# ─── DB Init (runs once to create tables) ────────────────────────────────────
+# Triggers whenever the dbInit Lambda code changes.
+# Invokes the Lambda immediately after deploy to create tables in RDS.
 
-data "archive_file" "db_init_zip" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambda/dbInit"
-  output_path = "${path.module}/.build/dbInit.zip"
-  excludes    = ["package-lock.json"]
-}
-
-resource "aws_lambda_function" "db_init" {
-  function_name    = "${var.project}-dbInit"
-  role             = aws_iam_role.lambda_exec.arn
-  runtime          = var.lambda_runtime
-  handler          = "index.handler"
-  filename         = data.archive_file.db_init_zip.output_path
-  source_code_hash = data.archive_file.db_init_zip.output_base64sha256
-  timeout          = 30
-  environment { variables = local.rds_env }
-  tags = { Project = var.project }
-}
-
-resource "aws_cloudwatch_log_group" "db_init" {
-  name              = "/aws/lambda/${aws_lambda_function.db_init.function_name}"
-  retention_in_days = 7
-}
-
-# Invoke dbInit once after deploy to create tables
 resource "null_resource" "run_db_init" {
-  triggers = { always = timestamp() }
+  triggers = { lambda_hash = data.archive_file.db_init_zip.output_base64sha256 }
+
   provisioner "local-exec" {
-    command = "aws lambda invoke --function-name ${aws_lambda_function.db_init.function_name} --region ${var.aws_region} --output json NUL 2>&1 || aws lambda invoke --function-name ${aws_lambda_function.db_init.function_name} --region ${var.aws_region} --output json /tmp/dbinit_out.json"
+    interpreter = ["PowerShell", "-Command"]
+    command     = <<-PS
+      Write-Host "Running dbInit Lambda to create database tables..."
+      aws lambda invoke `
+        --function-name ${aws_lambda_function.db_init.function_name} `
+        --region ${var.aws_region} `
+        --profile new-account `
+        --output json `
+        dbinit_response.json
+      Get-Content dbinit_response.json
+      Write-Host "dbInit complete."
+    PS
   }
-  depends_on = [aws_lambda_function.db_init]
+
+  depends_on = [
+    aws_lambda_function.db_init,
+    aws_apigatewayv2_stage.default
+  ]
 }

@@ -1,0 +1,19 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Copy this to terraform.tfvars and fill in the three secret values.
+# terraform.tfvars is already in .gitignore — never commit it.
+# ─────────────────────────────────────────────────────────────────────────────
+
+aws_region = "ap-southeast-1"
+project    = "biterush"
+
+# ── RDS ───────────────────────────────────────────────────────────────────────
+# RDS is created by Terraform — you only need to supply the password.
+db_name              = "biterush"
+db_username          = "admin"
+db_password          = "CHANGE_ME_min8chars_no_slash_at_sign"
+db_instance_class    = "db.t3.micro"
+db_allocated_storage = 20
+
+# ── Auth secrets ──────────────────────────────────────────────────────────────
+jwt_secret = "CHANGE_ME_long_random_string_min32chars"
+master_key = "CHANGE_ME_master_admin_key"

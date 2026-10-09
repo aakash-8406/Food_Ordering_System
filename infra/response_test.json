@@ -1,0 +1,1 @@
+{"errorType":"Error","errorMessage":"Unknown database 'biterush'","trace":["Error: Unknown database 'biterush'","    at getConn (file:///var/task/index.mjs:9:29)","    at Runtime.handler (file:///var/task/index.mjs:16:22)","    at Runtime.handleOnceNonStreaming (file:///var/runtime/index.mjs:1306:29)"]}
